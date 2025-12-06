@@ -1,6 +1,6 @@
 {
   "name": "big-file-upload",
-  "version": "1.0.0",
+  "version": "dev",
   "description": "大文件分片上传系统",
   "scripts": {
     "dev": "concurrently \"pnpm --filter frontend dev\" \"pnpm --filter backend dev\"",
