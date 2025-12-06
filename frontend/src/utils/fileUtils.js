@@ -1,10 +1,11 @@
 import SparkMD5 from 'spark-md5'
+import { calculateFileMD5WithWorkers } from './hashWorkerPool'
 
 // 默认分片大小：5MB
 export const DEFAULT_CHUNK_SIZE = 5 * 1024 * 1024
 
 /**
- * 计算文件MD5
+ * 计算文件MD5（单线程版本）
  */
 export const calculateFileMD5 = (file, onProgress) => {
   return new Promise((resolve, reject) => {
@@ -42,6 +43,14 @@ export const calculateFileMD5 = (file, onProgress) => {
 
     loadNext()
   })
+}
+
+/**
+ * 计算文件MD5（使用 Web Worker 并行计算，速度更快）
+ * 对于大文件（> 50MB），建议使用此方法
+ */
+export const calculateFileMD5Fast = (file, onProgress) => {
+  return calculateFileMD5WithWorkers(file, onProgress, 5 * 1024 * 1024)
 }
 
 /**

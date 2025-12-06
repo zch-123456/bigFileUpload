@@ -9,7 +9,8 @@ import {
 } from '@ant-design/icons'
 import { uploadAPI } from '../api/upload'
 import { 
-  calculateFileMD5, 
+  calculateFileMD5,
+  calculateFileMD5Fast, 
   createFileChunks, 
   formatFileSize,
   DEFAULT_CHUNK_SIZE 
@@ -28,6 +29,7 @@ const FileUpload = () => {
   const [uploadedChunks, setUploadedChunks] = useState(new Set())
   const [uploadInfo, setUploadInfo] = useState(null)
   const [errorMessage, setErrorMessage] = useState('')
+  const [hashTime, setHashTime] = useState(null) // 存储hash计算耗时（毫秒）
 
   const uploadIdRef = useRef(null)
   const fileHashRef = useRef(null)
@@ -51,6 +53,7 @@ const FileUpload = () => {
     setUploadedChunks(new Set())
     setUploadInfo(null)
     setErrorMessage('')
+    setHashTime(null)
     uploadIdRef.current = null
     fileHashRef.current = null
     
@@ -73,12 +76,29 @@ const FileUpload = () => {
       setStatus('hashing')
       message.info('正在计算文件哈希...')
       
-      const hash = await calculateFileMD5(file, (progress) => {
-        setHashProgress(progress)
-      })
+      // 记录hash计算开始时间
+      const hashStartTime = performance.now()
+      const useWorker = file.size > 50 * 1024 * 1024 // 大于50MB使用Worker加速
+      console.log(`[Hash计算] 开始计算文件哈希，文件大小: ${formatFileSize(file.size)}，使用Worker: ${useWorker}`)
+      
+      // 根据文件大小选择计算方法：大文件使用Worker并行计算
+      const hash = await (useWorker 
+        ? calculateFileMD5Fast(file, (progress) => {
+            setHashProgress(progress)
+          })
+        : calculateFileMD5(file, (progress) => {
+            setHashProgress(progress)
+          }))
+      
+      // 记录hash计算结束时间并计算耗时
+      const hashEndTime = performance.now()
+      const hashDuration = hashEndTime - hashStartTime
+      setHashTime(hashDuration)
       
       fileHashRef.current = hash
-      console.log('文件哈希:', hash)
+      console.log(`[Hash计算] 完成，耗时: ${hashDuration.toFixed(2)}ms (${(hashDuration / 1000).toFixed(2)}秒)`)
+      console.log(`[Hash计算] 文件哈希: ${hash}`)
+      console.log(`[Hash计算] 计算速度: ${(file.size / hashDuration * 1000 / 1024 / 1024).toFixed(2)} MB/s`)
 
       // 2. 检查文件是否已存在（秒传）
       const checkResult = await uploadAPI.check({
@@ -268,6 +288,7 @@ const FileUpload = () => {
     setUploadedChunks(new Set())
     setUploadInfo(null)
     setErrorMessage('')
+    setHashTime(null)
     uploadIdRef.current = null
     fileHashRef.current = null
     chunksRef.current = []
@@ -341,6 +362,26 @@ const FileUpload = () => {
             </div>
             <Progress percent={hashProgress} status="active" />
           </div>
+        )}
+
+        {/* Hash计算耗时显示 */}
+        {hashTime !== null && (
+          <Alert
+            message="Hash计算完成"
+            description={
+              <div>
+                <p>计算耗时: <strong>{hashTime.toFixed(2)}ms</strong> ({((hashTime) / 1000).toFixed(2)}秒)</p>
+                {file && (
+                  <p>
+                    计算速度: <strong>{((file.size / hashTime) * 1000 / 1024 / 1024).toFixed(2)} MB/s</strong>
+                  </p>
+                )}
+              </div>
+            }
+            type="info"
+            showIcon
+            style={{ marginTop: 16 }}
+          />
         )}
 
         {/* 上传进度 */}
